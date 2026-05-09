@@ -62,6 +62,11 @@ def scan(
     max_link_depth: int = typer.Option(1, "--max-link-depth"),
     cluster: bool = typer.Option(True, "--cluster/--no-cluster"),
     likely_threshold: float = typer.Option(0.75, "--likely-threshold"),
+    quality_threshold: float = typer.Option(
+        0.30,
+        "--quality-threshold",
+        help="Minimum profile-quality score required for clustering. Lower = more matches but more false positives.",
+    ),
     use_embeddings: bool = typer.Option(False, "--use-embeddings"),
     fmt: OutputFormat = typer.Option(OutputFormat.terminal, "--format"),
     output: Path | None = typer.Option(None, "--output"),
@@ -86,6 +91,7 @@ def scan(
         max_link_depth=max_link_depth,
         cluster=cluster,
         likely_threshold=likely_threshold,
+        quality_threshold=quality_threshold,
         use_embeddings=use_embeddings,
     )
 

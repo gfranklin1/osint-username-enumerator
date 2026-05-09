@@ -54,9 +54,23 @@ def score_pair(
     if a.username.lower() == b.username.lower():
         rarity = min(username_rarity(a.username), username_rarity(b.username))
         boost = _exact_rare_boost(rarity)
+        # Require at least one corroborating signal so the rare-username prior
+        # alone can never drag two strangers into a cluster: a real bio match,
+        # a real display-name match, an avatar match, a shared link, a
+        # location, or a cross-link.
+        corroborated = (
+            f.bio_similarity >= 0.40
+            or f.display_name_similarity >= 0.55
+            or f.avatar_similarity >= AVATAR_MATCH_FLOOR
+            or f.link_overlap_score > 0
+            or f.location_similarity >= 0.85
+            or f.crosslink_strength != "none"
+        )
         if boost > 0:
+            if not corroborated:
+                boost *= 0.30  # very small standalone contribution
             weighted += boost
-            if rarity >= 0.55:
+            if rarity >= 0.55 and corroborated:
                 evidence.append(
                     f"Exact rare-username match '{a.username}' across {a.site} and {b.site}"
                 )

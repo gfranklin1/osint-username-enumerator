@@ -36,6 +36,7 @@ class Profile(BaseModel):
     followers: int | None = None
     following: int | None = None
     raw_html_hash: str | None = None
+    quality: float = 0.0  # post-scrape signal richness, [0, 1]
 
     def key(self) -> str:
         return f"{self.site}:{self.username}".lower()
@@ -79,3 +80,4 @@ class ScanResult(BaseModel):
     profiles: list[Profile]
     errored_sites: list[SiteError] = []
     clusters: list[Cluster] = []
+    unverified_profiles: list[Profile] = []  # found but too low-signal to cluster

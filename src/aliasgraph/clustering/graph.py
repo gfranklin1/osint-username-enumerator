@@ -14,8 +14,8 @@ from aliasgraph.scoring.rarity import username_rarity
 # at least `admission_min` against at least `admission_majority` of the
 # current members. This prevents a chain (A-B 0.80, B-C 0.80, A-C 0.20)
 # from collapsing strangers into one identity.
-DEFAULT_ADMISSION_MAJORITY = 0.6
-DEFAULT_ADMISSION_MIN_RATIO = 0.85  # admission_min = threshold * this
+DEFAULT_ADMISSION_MAJORITY = 0.5
+DEFAULT_ADMISSION_MIN_RATIO = 0.80  # admission_min = threshold * this
 
 
 def build_clusters(

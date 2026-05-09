@@ -37,7 +37,8 @@ def render(result: ScanResult, console: Console | None = None) -> None:
     header.append(f"Variants: {len(result.generated_usernames)}    ")
     header.append(f"Profiles: {len(result.profiles)}    ", style="cyan")
     header.append(f"Clusters: {len(result.clusters)}    ", style="green")
-    header.append(f"Errors: {len(result.errored_sites)}", style="dim")
+    header.append(f"Errors: {len(result.errored_sites)}    ", style="dim")
+    header.append(f"Weak hits: {len(result.unverified_profiles)}", style="yellow")
     console.print(Panel(header, title="AliasGraph", expand=False))
 
     profile_by_key = {p.key(): p for p in result.profiles}
@@ -93,7 +94,27 @@ def render(result: ScanResult, console: Console | None = None) -> None:
         console.print(table)
 
     if not result.profiles:
-        console.print("[yellow]No profiles found.[/yellow]")
+        console.print("[yellow]No verified profiles found.[/yellow]")
+
+    if result.unverified_profiles:
+        weak = result.unverified_profiles
+        table = Table(
+            title=f"Weak hits — bare URL existence, not enough signal to cluster ({len(weak)})",
+            show_header=True,
+            border_style="yellow",
+        )
+        table.add_column("Site", style="cyan")
+        table.add_column("Username", style="bold")
+        table.add_column("Quality", style="dim")
+        table.add_column("URL", style="dim")
+        for p in weak:
+            table.add_row(p.site, p.username, f"{p.quality:.2f}", _short(str(p.url), 60))
+        console.print(table)
+        console.print(
+            "[dim]These sites returned 200 OK for the username but the page contained "
+            "no user-specific content (error pages, generic landings, marketing copy). "
+            "Lower --quality-threshold to include them.[/dim]"
+        )
 
     if result.errored_sites:
         reasons = Counter(e.reason for e in result.errored_sites)

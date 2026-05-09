@@ -131,6 +131,22 @@ def render_html(result: ScanResult) -> str:
         parts.append(_profile_table(ungrouped))
         parts.append("</div></section>")
 
+    if result.unverified_profiles:
+        parts.append("<section class='ungrouped'>")
+        parts.append(
+            "<div class='cluster-header'>"
+            f"<h2 style='color:var(--warn)'>Weak hits · {len(result.unverified_profiles)} (skipped from clustering)</h2>"
+            "</div><div class='cluster-body'>"
+        )
+        parts.append(
+            "<p class='muted' style='margin-top:0;font-size:12px'>"
+            "Sites returned 200 OK but the page had no real user signal "
+            "(error pages, marketing copy, garbled text). Lower "
+            "<code>--quality-threshold</code> to include them.</p>"
+        )
+        parts.append(_profile_table(result.unverified_profiles))
+        parts.append("</div></section>")
+
     if result.errored_sites:
         from collections import Counter
         reasons = Counter(e.reason for e in result.errored_sites)

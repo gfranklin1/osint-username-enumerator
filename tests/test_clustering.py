@@ -33,17 +33,25 @@ def test_no_clusters_when_below_threshold():
     assert clusters == []
 
 
-def test_rare_username_clusters_without_crosslinks():
-    # Same rare exact handle across many platforms, with a real bio on at least one.
+def test_rare_username_clusters_when_corroborated():
+    # Rare exact handle PLUS at least one real signal (bio / display match) per pair.
     bio = "Studying CS and Math at the University of Maryland."
     a = _p("GitHub", "allarkvarkk", display_name="Garrett Franklin", bio=bio)
     b = _p("Substack", "allarkvarkk", display_name="G Franklin")
-    c = _p("Spotify", "allarkvarkk", display_name="allarkvarkk")
+    c = _p("Spotify", "allarkvarkk", display_name="Garrett F.", bio=bio)
     clusters = build_clusters([a, b, c], threshold=0.75)
     assert len(clusters) == 1
     assert {"GitHub:allarkvarkk", "Substack:allarkvarkk", "Spotify:allarkvarkk"}.issubset(
         set(clusters[0].members)
     )
+
+
+def test_rare_username_alone_does_not_cluster_strangers():
+    # No corroborating signal — username match should NOT be enough.
+    a = _p("GitHub", "allarkvarkk", display_name="Garrett Franklin")
+    b = _p("Spotify", "allarkvarkk", display_name="allarkvarkk")
+    clusters = build_clusters([a, b], threshold=0.75)
+    assert clusters == []
 
 
 def test_chain_transitivity_does_not_collapse_strangers():

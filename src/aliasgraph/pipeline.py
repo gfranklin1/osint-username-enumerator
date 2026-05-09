@@ -17,6 +17,11 @@ from aliasgraph.scanning import scan as run_scan
 from aliasgraph.scanning.scanner import ProgressCallback as ScanCB
 from aliasgraph.scraping import scrape_all
 from aliasgraph.scraping.base import ScrapeCallback
+from aliasgraph.scraping.validation import (
+    dedupe_signature,
+    is_garbled_profile,
+    profile_quality,
+)
 
 # Trigger registration of site-specific scrapers.
 import aliasgraph.scraping.sites  # noqa: F401
@@ -41,6 +46,7 @@ class PipelineConfig:
     cluster: bool = True
     likely_threshold: float = 0.75
     use_embeddings: bool = False
+    quality_threshold: float = 0.30  # below this, profile is "unverified" and skipped from clustering
 
 
 @dataclass
@@ -106,6 +112,13 @@ async def run(cfg: PipelineConfig, cbs: PipelineCallbacks | None = None) -> Scan
             )
             errors.extend(follow_errors)
 
+    # Compute quality + dedupe near-identical false-positive landings.
+    profiles = _annotate_quality(profiles)
+    profiles = _dedupe_landing_pages(profiles)
+
+    verified = [p for p in profiles if p.quality >= cfg.quality_threshold]
+    unverified = [p for p in profiles if p.quality < cfg.quality_threshold]
+
     embedder = None
     if cfg.use_embeddings:
         from aliasgraph.scoring.embeddings import SentenceTransformerEmbedder
@@ -113,10 +126,14 @@ async def run(cfg: PipelineConfig, cbs: PipelineCallbacks | None = None) -> Scan
         embedder = SentenceTransformerEmbedder()
 
     clusters: list[Cluster] = []
-    if cfg.cluster and len(profiles) >= 2:
-        _status(cbs, f"Scoring {len(profiles)} profiles and clustering …")
+    if cfg.cluster and len(verified) >= 2:
+        _status(
+            cbs,
+            f"Scoring {len(verified)} verified profiles "
+            f"({len(unverified)} weak hits skipped) and clustering …",
+        )
         clusters = build_clusters(
-            profiles,
+            verified,
             threshold=cfg.likely_threshold,
             embedder=embedder,
         )
@@ -124,10 +141,44 @@ async def run(cfg: PipelineConfig, cbs: PipelineCallbacks | None = None) -> Scan
     return ScanResult(
         seed=cfg.seed,
         generated_usernames=usernames,
-        profiles=profiles,
+        profiles=verified,
         errored_sites=errors,
         clusters=clusters,
+        unverified_profiles=unverified,
     )
+
+
+def _annotate_quality(profiles: list[Profile]) -> list[Profile]:
+    out: list[Profile] = []
+    for p in profiles:
+        if is_garbled_profile(p):
+            out.append(p.model_copy(update={"quality": 0.0}))
+            continue
+        q = profile_quality(p)
+        out.append(p.model_copy(update={"quality": round(q, 3)}))
+    return out
+
+
+def _dedupe_landing_pages(profiles: list[Profile]) -> list[Profile]:
+    """Collapse profiles whose (display, bio, avatar) signature is identical.
+
+    Per-region clones of the same site (e.g. OP.GG LoL Korea / Europe / etc.)
+    return the same generic landing page for any username — keep only the
+    first to avoid bloating clusters and reports.
+    """
+    seen: dict[tuple[str, str, str], Profile] = {}
+    out: list[Profile] = []
+    for p in profiles:
+        sig = dedupe_signature(p)
+        # Only dedupe when at least display+bio carry meaningful content.
+        if not sig[0] or not sig[1]:
+            out.append(p)
+            continue
+        if sig in seen:
+            continue
+        seen[sig] = p
+        out.append(p)
+    return out
 
 
 def _seen_pairs(profiles: list[Profile], usernames: list[str]) -> set[tuple[str, str]]:
