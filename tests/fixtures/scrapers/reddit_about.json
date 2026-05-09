@@ -1,0 +1,13 @@
+{
+  "kind": "t2",
+  "data": {
+    "name": "spez",
+    "total_karma": 700000,
+    "created_utc": 1118030400,
+    "icon_img": "https://styles.redditmedia.com/avatar.png?s=100",
+    "subreddit": {
+      "title": "Steve Huffman",
+      "public_description": "Reddit cofounder. https://github.com/spez"
+    }
+  }
+}

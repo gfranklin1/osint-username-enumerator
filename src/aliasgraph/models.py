@@ -15,6 +15,12 @@ class PlatformConfig(BaseModel):
     rate_limit_seconds: float = 0.0
 
 
+class ExtractedHandle(BaseModel):
+    site: str  # canonical platform name (must match a PlatformConfig.name when possible)
+    handle: str
+    source_url: str  # the raw link this handle was parsed from
+
+
 class Profile(BaseModel):
     site: str
     url: HttpUrl
@@ -22,7 +28,8 @@ class Profile(BaseModel):
     display_name: str | None = None
     bio: str | None = None
     location: str | None = None
-    links: list[str] = []
+    links: list[str] = []  # normalized outbound URLs
+    extracted_handles: list[ExtractedHandle] = []
     avatar_url: str | None = None
     avatar_hash: str | None = None
     created_at: str | None = None
@@ -30,11 +37,39 @@ class Profile(BaseModel):
     following: int | None = None
     raw_html_hash: str | None = None
 
+    def key(self) -> str:
+        return f"{self.site}:{self.username}".lower()
+
 
 class SiteError(BaseModel):
     site: str
     username: str
-    reason: str  # e.g. "timeout", "dns", "http_5xx", "connection"
+    reason: str  # e.g. "timeout", "dns", "http_5xx", "connection", "scrape_*"
+
+
+class MatchFeatures(BaseModel):
+    username_similarity: float
+    display_name_similarity: float
+    bio_similarity: float
+    link_overlap_score: float
+    location_similarity: float
+    crosslink_strength: str  # "mutual" | "one_way" | "none"
+
+
+class AssertedAccount(BaseModel):
+    """A handle asserted by a discovered profile but not directly scanned/verified."""
+    site: str
+    handle: str
+    url: str
+    asserted_by: list[str]  # "site:username" of profiles that link to this one
+
+
+class Cluster(BaseModel):
+    cluster_id: int
+    confidence: float
+    members: list[str]  # "site:username"
+    asserted: list[AssertedAccount] = []
+    evidence: list[str]
 
 
 class ScanResult(BaseModel):
@@ -42,3 +77,4 @@ class ScanResult(BaseModel):
     generated_usernames: list[str]
     profiles: list[Profile]
     errored_sites: list[SiteError] = []
+    clusters: list[Cluster] = []

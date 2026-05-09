@@ -1,0 +1,16 @@
+{
+  "login": "torvalds",
+  "id": 1024025,
+  "name": "Linus Torvalds",
+  "company": null,
+  "blog": "",
+  "location": "Portland, OR",
+  "email": null,
+  "bio": "Linux kernel maintainer. Reach me on https://twitter.com/Linus__Torvalds",
+  "twitter_username": "Linus__Torvalds",
+  "public_repos": 6,
+  "followers": 200000,
+  "following": 0,
+  "created_at": "2011-09-03T15:26:22Z",
+  "avatar_url": "https://avatars.githubusercontent.com/u/1024025?v=4"
+}

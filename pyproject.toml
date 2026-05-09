@@ -1,6 +1,6 @@
 [project]
 name = "aliasgraph"
-version = "0.1.0"
+version = "0.2.0"
 description = "OSINT username permutation and explainable account-attribution tool"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -13,13 +13,19 @@ dependencies = [
     "rich>=13.0.0",
     "rapidfuzz>=3.0.0",
     "networkx>=3.0",
+    "selectolax>=0.3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
     "ruff>=0.6.0",
     "mypy>=1.10.0",
+]
+ml = [
+    "sentence-transformers>=3.0.0",
+    "numpy>=2.0.0",
 ]
 
 [project.scripts]
