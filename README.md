@@ -107,6 +107,9 @@ SCRAPING (profile enrichment)
 SCORING & CLUSTERING
   --cluster / --no-cluster   Build identity clusters. (default: on)
   --likely-threshold FLOAT   Minimum pairwise score for a cluster edge. (default: 0.75)
+  --quality-threshold FLOAT  Minimum profile-quality score required for a profile
+                             to participate in clustering. Lower = more matches +
+                             more false positives. (default: 0.30)
   --use-embeddings           Use sentence-transformers for bio similarity.
                              Requires `aliasgraph[ml]` extra.
 
@@ -174,6 +177,18 @@ uv run aliasgraph scan torvalds --no-avatar-hash --no-follow-links
 uv run aliasgraph scan torvalds --likely-threshold 0.6
 ```
 
+### Strict mode — only cluster profiles with rich, validated content
+
+```bash
+uv run aliasgraph scan torvalds --quality-threshold 0.5
+```
+
+### Permissive mode — let bare URL hits cluster too
+
+```bash
+uv run aliasgraph scan torvalds --quality-threshold 0.10
+```
+
 ### Pipe into jq
 
 ```bash
@@ -214,6 +229,12 @@ uv run aliasgraph list-sites
 
 **Boilerplate bios are stripped.** Things like `"Imgur: The magic of the Internet"` or `"Trello is a collaboration tool"` are recognized as platform copy and removed before scoring — they don't pollute similarity in either direction.
 
+**Profile quality filter.** After scraping, every profile is scored on signal richness (real display name, real bio, location, avatar, extracted links, follower count, …). Profiles below `--quality-threshold` (default 0.30) are excluded from clustering and reported separately as **weak hits** — sites that returned 200 OK with no real user-specific content (error pages like "Channel Not Found", site marketing copy, garbled mojibake). They still appear in the report so you can see them, but they don't drag unrelated identities together through the rare-username prior.
+
+**Landing-page dedupe.** Profiles whose `(display_name, bio, avatar_url)` signature is identical are collapsed (e.g. `OP.GG LoL Korea / Europe / Brazil / …` all serve the same generic landing page → kept as one).
+
+**Rare-username prior requires corroboration.** A long unique handle counts as evidence only when accompanied by at least one of: matching bio, matching display name, matching avatar, shared link, matching location, or any cross-link. Without corroboration, the boost is shrunk to 30%, so two strangers sharing only an unusual handle can no longer auto-cluster.
+
 **Asserted accounts.** When a discovered profile (e.g. GitHub) advertises a handle on a platform that we couldn't directly verify (e.g. LinkedIn refuses unauthenticated lookups), the asserted handle still appears as a yellow row inside its cluster, tagged `asserted via GitHub:user`.
 
 ---
@@ -232,7 +253,7 @@ uv run aliasgraph list-sites
 ## Test
 
 ```bash
-uv run pytest -q     # 55 tests
+uv run pytest -q     # 63 tests
 ```
 
 ---
