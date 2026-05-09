@@ -6,10 +6,13 @@ from pydantic import BaseModel, HttpUrl
 class PlatformConfig(BaseModel):
     name: str
     profile_url: str  # template containing "{username}"
-    rate_limit_seconds: float = 1.0
-    not_found_status_codes: list[int] = [404]
-    not_found_body_substrings: list[str] = []
-    requires_javascript: bool = False
+    main_url: str | None = None
+    check_type: str = "status_code"  # status_code | message | response_url
+    presence_strings: list[str] = []
+    absence_strings: list[str] = []
+    regex_check: str | None = None
+    headers: dict[str, str] = {}
+    rate_limit_seconds: float = 0.0
 
 
 class Profile(BaseModel):
@@ -28,7 +31,14 @@ class Profile(BaseModel):
     raw_html_hash: str | None = None
 
 
+class SiteError(BaseModel):
+    site: str
+    username: str
+    reason: str  # e.g. "timeout", "dns", "http_5xx", "connection"
+
+
 class ScanResult(BaseModel):
     seed: str
     generated_usernames: list[str]
     profiles: list[Profile]
+    errored_sites: list[SiteError] = []

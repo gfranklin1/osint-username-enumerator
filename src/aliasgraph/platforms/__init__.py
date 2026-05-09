@@ -1,3 +1,3 @@
-from aliasgraph.platforms.configs import PLATFORMS, get_platforms
+from aliasgraph.platforms.loader import filter_sites, load_all_sites
 
-__all__ = ["PLATFORMS", "get_platforms"]
+__all__ = ["filter_sites", "load_all_sites"]
