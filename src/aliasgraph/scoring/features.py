@@ -5,6 +5,7 @@ from typing import Protocol
 from rapidfuzz import fuzz
 
 from aliasgraph.models import MatchFeatures, Profile
+from aliasgraph.scraping.avatar import hamming_similarity
 
 # Tokens that should not be allowed to inflate similarity by themselves.
 GENERIC_BIO_TOKENS = {
@@ -98,5 +99,6 @@ def pairwise_features(
         bio_similarity=_bio_sim(a, b, embedder),
         link_overlap_score=_link_overlap(a, b),
         location_similarity=_location_sim(a, b),
+        avatar_similarity=hamming_similarity(a.avatar_hash, b.avatar_hash),
         crosslink_strength=_crosslink(a, b),
     )

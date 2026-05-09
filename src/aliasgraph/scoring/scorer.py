@@ -8,10 +8,13 @@ WEIGHTS = {
     "username_similarity": 0.15,
     "display_name_similarity": 0.15,
     "bio_similarity": 0.20,
-    "link_overlap": 0.25,
+    "link_overlap": 0.20,
     "location_similarity": 0.05,
+    "avatar_similarity": 0.20,
     "crosslink_one_way_boost": 0.25,
 }
+
+AVATAR_MATCH_FLOOR = 0.93  # ≥6 differing bits in 64 still treated as same image
 
 
 def _exact_rare_boost(rarity: float) -> float:
@@ -43,6 +46,7 @@ def score_pair(
         + WEIGHTS["bio_similarity"] * f.bio_similarity
         + WEIGHTS["link_overlap"] * f.link_overlap_score
         + WEIGHTS["location_similarity"] * f.location_similarity
+        + WEIGHTS["avatar_similarity"] * f.avatar_similarity
     )
 
     # Rare-username prior: if both profiles share the *exact* same handle and
@@ -77,6 +81,10 @@ def score_pair(
         evidence.append("Similar bio text")
     if f.location_similarity >= 0.85 and a.location and b.location:
         evidence.append(f"Same location '{a.location}'")
+    if f.avatar_similarity >= AVATAR_MATCH_FLOOR:
+        evidence.append(
+            f"Same avatar (pHash similarity {f.avatar_similarity:.0%})"
+        )
     if f.username_similarity >= 0.85 and a.username.lower() != b.username.lower():
         evidence.append(f"Similar usernames '{a.username}' / '{b.username}'")
 

@@ -35,6 +35,7 @@ class PipelineConfig:
     timeout: float = 8.0
     concurrency: int = 50
     scrape: bool = True
+    avatar_hash: bool = True
     follow_links: bool = True
     max_link_depth: int = 1
     cluster: bool = True
@@ -89,6 +90,7 @@ async def run(cfg: PipelineConfig, cbs: PipelineCallbacks | None = None) -> Scan
         enriched, scrape_errors = await scrape_all(
             profiles,
             timeout=cfg.timeout,
+            enable_avatar_hash=cfg.avatar_hash,
             progress_cb=cbs.on_scrape_progress,
         )
         profiles = enriched
@@ -179,7 +181,9 @@ async def _follow_pass(
         new_errors.extend(errs)
 
     if new_profiles and cfg.scrape:
-        scraped, scrape_errors = await scrape_all(new_profiles, timeout=cfg.timeout)
+        scraped, scrape_errors = await scrape_all(
+            new_profiles, timeout=cfg.timeout, enable_avatar_hash=cfg.avatar_hash
+        )
         new_profiles = scraped
         new_errors.extend(scrape_errors)
 

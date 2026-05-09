@@ -1,104 +1,251 @@
 # AliasGraph
 
-OSINT username permutation and explainable account-attribution tool. See [ITER1.md](ITER1.md) (v0.1 spec) and [ITER2.md](ITER2.md) (v0.2 spec) for the full design.
+OSINT username permutation, profile scraping, and explainable account-attribution. Given a seed handle, AliasGraph generates likely username variants, checks them across ~1400 sites, scrapes the profiles it finds, follows cross-platform links, scores every pair of profiles using explainable similarity features, and clusters the ones that probably belong to the same person.
 
-## Status
+Design specs: [ITER1.md](ITER1.md) (v0.1) and [ITER2.md](ITER2.md) (v0.2).
 
-**v0.2** — full pipeline:
+---
 
-1. Generate likely username variants from seed + identity hints.
-2. Concurrent existence checks across **1413 sites** (vendored from [maigret](https://github.com/soxoj/maigret), MIT — see `src/aliasgraph/resources/SITES_NOTICE.md`).
-3. Profile scraping — GitHub / Reddit / Dev.to via JSON APIs, all other sites via a generic HTML scraper (OpenGraph + JSON-LD `Person.sameAs` + `<link rel="me">`).
-4. Cross-platform link extraction — bio URLs, dedicated link fields, IndieWeb `rel=me`. Each link is parsed against a canonical host map into `(platform, handle)` pointers.
-5. **Auto-follow** at depth 1 — extracted handles become new seeds for a second-pass scan.
-6. Pairwise scoring with explicit evidence — mutual cross-link → ≥99% confidence; one-way cross-link → strong boost; bio / display-name / location / username / link-overlap each contribute weighted similarity.
-7. Connected-component clustering on edges above the likely-threshold (default 0.75).
-8. Live progress for both scan and scrape phases. JSON or terminal report.
+## What it does
 
-Optional `[ml]` extra adds sentence-transformer bio embeddings behind `--use-embeddings` for higher-quality bio similarity.
+```
+seed handle
+   │
+   ▼
+[1] Permutation engine ──── username variants (with optional name / alias / suffix hints)
+   │
+   ▼
+[2] Concurrent scanner ──── ~1400 sites (vendored from maigret, MIT)
+   │     status_code / message / response_url checks
+   ▼
+[3] Profile scraper ─────── GitHub / Reddit / Dev.to via APIs;
+   │                        all other sites via generic HTML (OpenGraph, JSON-LD, rel=me)
+   │                        + avatar fetch + perceptual hash (pHash)
+   │                        + GitHub social_accounts → LinkedIn / Mastodon / etc.
+   ▼
+[4] Link extractor ──────── URL regex + LINK_HOST_MAP → (platform, handle)
+   │
+   ▼
+[5] Follow-pass ─────────── extracted handles become new seeds (depth 1)
+   │
+   ▼
+[6] Pairwise scorer ─────── username / display / bio (rapidfuzz or embeddings) /
+   │                        link overlap / location / avatar pHash / cross-link evidence
+   │                        + rare-username prior + boilerplate-bio filter
+   ▼
+[7] Core-pair clusterer ─── networkx + majority-admission so chain transitivity
+   │                        doesn't collapse strangers
+   ▼
+[8] Reporter ────────────── terminal (rich), JSON, or self-contained HTML
+```
+
+---
 
 ## Install
+
+Requires Python 3.14.
 
 ```bash
 uv venv --python 3.14.4
 uv pip install -e '.[dev]'
-# optional, for --use-embeddings:
+```
+
+Optional sentence-transformers for higher-quality bio similarity:
+
+```bash
 uv pip install -e '.[dev,ml]'
 ```
 
-## Usage
+---
+
+## Quick start
 
 ```bash
-# how many sites are available
+# How many sites are loaded?
 uv run aliasgraph list-sites
+# → 1413 sites loaded
 
-# typical: scrape, follow links, cluster, write JSON
-uv run aliasgraph scan gvanrossum --site-limit 100 --output report.json --format json
+# Quickest sweep (cap site count for speed)
+uv run aliasgraph scan torvalds --site-limit 60
 
-# fast smoke
-uv run aliasgraph scan torvalds --site-limit 60 --max-candidates 1
+# Full sweep across every site
+uv run aliasgraph scan torvalds
 
-# with identity hints + suffixes
-uv run aliasgraph scan torvalds \
-    --first-name Linus --last-name Torvalds \
-    --alias ltorvalds --numeric-suffix 91 \
-    --site-limit 300 --max-candidates 20 --concurrency 80
-
-# limit to specific platforms
-uv run aliasgraph scan torvalds --platform GitHub --platform Reddit
-
-# no scraping (v0.1-style existence-only output)
-uv run aliasgraph scan torvalds --no-scrape --no-cluster
-
-# embeddings-backed bio similarity
-uv run aliasgraph scan torvalds --site-limit 100 --use-embeddings
+# Generate clickable browser report
+uv run aliasgraph scan torvalds --site-limit 100 --format html --output report.html
+xdg-open report.html
 ```
 
-### Flags
+---
 
-Discovery / scanning:
-- `--max-candidates N` — cap generated username variants (default 30)
-- `--site-limit N` — cap sites scanned, 0 = all (default 0)
-- `--concurrency N` — parallel HTTP requests (default 50)
-- `--timeout SECS` — per-request timeout (default 8)
-- `--platform NAME` — repeatable; restrict to specific sites
-- `--first-name`, `--last-name`, `--alias`, `--numeric-suffix` — identity hints
+## Every flag
 
-Scrape / cluster:
-- `--scrape / --no-scrape` (default on)
-- `--follow-links / --no-follow-links` — second-pass scan on extracted handles (default on)
-- `--max-link-depth N` (default 1)
-- `--cluster / --no-cluster` (default on)
-- `--likely-threshold FLOAT` — minimum pairwise score to draw a cluster edge (default 0.75)
-- `--use-embeddings` — enable sentence-transformers bio similarity (requires `[ml]` extra)
+```
+USAGE
+  aliasgraph scan SEED [OPTIONS]
+  aliasgraph list-sites
 
-Output:
-- `--format terminal|json`, `--output PATH`, `--quiet`
+DISCOVERY (permutation engine)
+  --first-name TEXT          Identity hint, used by the permutation engine.
+  --last-name TEXT           Identity hint.
+  --alias TEXT               Known additional handle. Repeatable.
+  --numeric-suffix TEXT      Append e.g. 91 / 2005 to candidates. Repeatable.
+  --max-candidates INT       Cap generated variants. (default: 30)
 
-## Scoring intuition
+SCANNING (existence checks)
+  --platform NAME            Restrict scan to a site by name. Repeatable.
+  --site-limit INT           Scan at most N sites; 0 = all. (default: 0)
+  --concurrency INT          Parallel HTTP requests. (default: 50)
+  --timeout FLOAT            Per-request timeout in seconds. (default: 8.0)
 
-| Evidence | Effect |
-| --- | --- |
-| Mutual cross-link (A links B, B links A) | floor at **0.99** |
-| One-way cross-link | weighted score + 0.20 boost (capped at 0.95) |
-| Identical / shared link in profile bios | weighted via Jaccard (weight 0.25) |
-| Same display name | weight 0.15 |
-| Similar bio (rapidfuzz token-set or embeddings) | weight 0.20 |
-| Similar usernames | weight 0.20 |
-| Same location | weight 0.05 |
+SCRAPING (profile enrichment)
+  --scrape / --no-scrape             Enrich found profiles. (default: on)
+  --avatar-hash / --no-avatar-hash   Download + pHash avatars. (default: on)
+  --follow-links / --no-follow-links Re-scan handles extracted from bios. (default: on)
+  --max-link-depth INT               Cap follow-link recursion. (default: 1)
 
-Generic bio tokens (`developer`, `founder`, `student`, …) are penalized so two profiles that just say "developer" don't cluster together.
+SCORING & CLUSTERING
+  --cluster / --no-cluster   Build identity clusters. (default: on)
+  --likely-threshold FLOAT   Minimum pairwise score for a cluster edge. (default: 0.75)
+  --use-embeddings           Use sentence-transformers for bio similarity.
+                             Requires `aliasgraph[ml]` extra.
 
-Each cluster comes with an evidence list explaining *why* its members were grouped.
+OUTPUT
+  --format {terminal,json,html}   Report format. (default: terminal)
+  --output PATH                   Write report to file (any format).
+  --quiet                         Suppress live progress bar.
+```
+
+---
+
+## Worked examples
+
+### Find your own footprint, get a browser report
+
+```bash
+uv run aliasgraph scan myhandle \
+  --first-name First --last-name Last \
+  --format html --output report.html
+```
+
+### Fast smoke against a known account
+
+```bash
+uv run aliasgraph scan torvalds --site-limit 60 --max-candidates 1
+```
+
+### Full deep sweep with embeddings + JSON for downstream tooling
+
+```bash
+uv run aliasgraph scan torvalds --use-embeddings --format json --output torvalds.json
+```
+
+### Scan only specific platforms
+
+```bash
+uv run aliasgraph scan torvalds --platform GitHub --platform Reddit --platform Dev.to
+```
+
+### Try multiple identity variants
+
+```bash
+uv run aliasgraph scan jdoe \
+  --first-name Jane --last-name Doe \
+  --alias jdoe89 --alias janedoe \
+  --numeric-suffix 89 --numeric-suffix 1995 \
+  --max-candidates 50
+```
+
+### Existence-only scan (skip scraping/clustering)
+
+```bash
+uv run aliasgraph scan torvalds --no-scrape --no-cluster
+```
+
+### Disable expensive avatar fetching for speed
+
+```bash
+uv run aliasgraph scan torvalds --no-avatar-hash --no-follow-links
+```
+
+### Lower threshold to surface weaker matches
+
+```bash
+uv run aliasgraph scan torvalds --likely-threshold 0.6
+```
+
+### Pipe into jq
+
+```bash
+uv run aliasgraph scan torvalds --format json --quiet | jq '.clusters[].members'
+```
+
+### List sites in the database
+
+```bash
+uv run aliasgraph list-sites
+```
+
+---
+
+## Output formats
+
+| Flag | Goes to | Use when |
+| --- | --- | --- |
+| `--format terminal` (default) | stderr (rich panels) | Reading interactively. |
+| `--format json` + `--output report.json` | file | Feeding into another tool, archiving, diffing runs. |
+| `--format html` + `--output report.html` | file | Sharing a clickable, dark-themed report. Single file, no external assets. |
+
+---
+
+## How scoring works
+
+| Signal | Default weight | Notes |
+| --- | --- | --- |
+| Mutual cross-link (A↔B) | floor 0.99 | Profiles that link to each other are basically certain. |
+| One-way cross-link | +0.25 boost (cap 0.95) | A links to B but B doesn't link back. |
+| Same exact rare username | step 0.20–0.60 | Long, unusual handles ≥ 0.85 rarity get +0.60. Common handles like `ben` / `john` / `admin` get nothing. |
+| Avatar pHash similarity | 0.20 | Same image (Hamming ≤ 6 bits) → near-1.0. Identical avatars are very strong evidence. |
+| Bio similarity | 0.20 | rapidfuzz token-set, or sentence-transformer cosine if `--use-embeddings`. Generic tokens (`developer`, `student`, …) are penalized. |
+| Link overlap | 0.20 | Jaccard over normalized outbound URLs. |
+| Display name similarity | 0.15 | rapidfuzz; falls back to username when display is missing. |
+| Username string similarity | 0.15 | Catches near-but-not-exact variants (`jdoe` / `j_doe`). |
+| Location similarity | 0.05 | Direct fuzzy match. |
+
+**Boilerplate bios are stripped.** Things like `"Imgur: The magic of the Internet"` or `"Trello is a collaboration tool"` are recognized as platform copy and removed before scoring — they don't pollute similarity in either direction.
+
+**Asserted accounts.** When a discovered profile (e.g. GitHub) advertises a handle on a platform that we couldn't directly verify (e.g. LinkedIn refuses unauthenticated lookups), the asserted handle still appears as a yellow row inside its cluster, tagged `asserted via GitHub:user`.
+
+---
+
+## How clustering works
+
+1. Score every pair of discovered profiles.
+2. Drop edges below `--likely-threshold` (default 0.75).
+3. Sort surviving edges high-to-low.
+4. Build clusters greedily by *core-pair seeding*: when admitting a new node, require it to score above threshold against a **majority** (60%) of existing members. This prevents `A↔B 0.80` and `B↔C 0.80` with `A↔C 0.20` from collapsing strangers into one identity.
+5. Each cluster's confidence is the mean of its surviving edge scores.
+6. Cluster evidence is aggregated: rare-username consensus, display-name variants, longest bio, locations, outbound links, in-cluster cross-links — all reported once, not per-pair.
+
+---
 
 ## Test
 
 ```bash
-uv run pytest -q
+uv run pytest -q     # 55 tests
 ```
+
+---
 
 ## Limitations
 
-- Sites that need JavaScript or login walls (Twitter/X, Instagram, LinkedIn for non-public bios) usually return a generic page; the generic scraper still extracts what it can but cross-links from those pages are usually corporate, not user-owned.
-- The vendored maigret site DB is noisy: some sites return false positives (e.g. Bit.ly's `not_found` rule is loose). Errors and unreachable sites are reported separately in `errored_sites`, not silently dropped.
-- Caching, robots.txt enforcement, avatar perceptual hashing, and HTML/Markdown reports are deferred.
+- Sites that need JavaScript or login walls (Twitter/X, Instagram, LinkedIn for non-public bios) usually return generic pages; the generic scraper still extracts what it can but cross-links from those pages are often platform-corporate, not user-owned.
+- The vendored maigret site DB is noisy: a few sites return false positives (e.g. Bit.ly's not-found rule is loose). All errors and unreachable sites are reported separately, not silently dropped.
+- Caching, robots.txt enforcement, and Markdown-format reports are deferred (see ITER2.md).
+- Authenticated API access (GitHub PAT, Reddit OAuth) is not used — rate limits are tolerable for typical scan sizes but unauthenticated GitHub will throttle at 60 req/hr/IP.
+
+---
+
+## Credits
+
+Site database vendored from [maigret](https://github.com/soxoj/maigret) (MIT). See `src/aliasgraph/resources/SITES_NOTICE.md`.

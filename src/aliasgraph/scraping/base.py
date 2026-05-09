@@ -80,6 +80,7 @@ async def scrape_all(
     timeout: float = DEFAULT_SCRAPE_TIMEOUT,
     per_host: int = DEFAULT_PER_HOST,
     enable_generic: bool = True,
+    enable_avatar_hash: bool = True,
     progress_cb: ScrapeCallback | None = None,
 ) -> tuple[list[Profile], list[SiteError]]:
     """Run the appropriate scraper for each profile in parallel, with per-host limits."""
@@ -130,6 +131,10 @@ async def scrape_all(
                 progress_cb(progress)
 
         await asyncio.gather(*(task(p) for p in profiles))
+
+        if enable_avatar_hash:
+            from aliasgraph.scraping.avatar import populate_avatar_hashes
+            enriched_out = await populate_avatar_hashes(enriched_out, client)
 
     enriched_out.sort(key=lambda p: (p.site.lower(), p.username))
     return enriched_out, errors

@@ -53,6 +53,7 @@ class MatchFeatures(BaseModel):
     bio_similarity: float
     link_overlap_score: float
     location_similarity: float
+    avatar_similarity: float = 0.0
     crosslink_strength: str  # "mutual" | "one_way" | "none"
 
 
