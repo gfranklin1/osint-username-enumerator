@@ -5,6 +5,23 @@ from pathlib import Path
 
 from aliasgraph.models import Profile, ScanResult
 
+
+def _safe_url(s: str | None) -> str:
+    """HTML-attribute-safe URL: blanks anything that isn't a plain http(s) URL.
+
+    Hostile pages can supply ``javascript:alert(1)`` as their og:image or have
+    a redirect target that smuggles a non-http scheme. ``html.escape`` would
+    keep the value intact and the browser would still execute it from
+    ``href=`` (and in some legacy contexts from ``src=``). We strip non-http(s)
+    URLs here so the dangerous schemes never reach the DOM.
+    """
+    if not s:
+        return ""
+    s = s.strip()
+    if not (s.lower().startswith("http://") or s.lower().startswith("https://")):
+        return ""
+    return escape(s, quote=True)
+
 CSS = """
 :root {
   --bg: #0e1116;
@@ -170,10 +187,13 @@ def _profile_table(profiles: list[Profile], asserted=None) -> str:
         "<th>Display name</th><th>Bio</th><th>URL</th></tr>"
     )
     for p in profiles:
-        avatar = (
-            f"<img class='thumb' src='{escape(p.avatar_url)}' alt=''>"
-            if p.avatar_url
-            else ""
+        avatar_src = _safe_url(p.avatar_url)
+        avatar = f"<img class='thumb' src='{avatar_src}' alt=''>" if avatar_src else ""
+        profile_url_safe = _safe_url(str(p.url))
+        url_cell = (
+            f"<a href='{profile_url_safe}' target='_blank' rel='noopener'>{profile_url_safe}</a>"
+            if profile_url_safe
+            else "<span class='muted'>(invalid URL)</span>"
         )
         rows.append(
             "<tr>"
@@ -183,12 +203,18 @@ def _profile_table(profiles: list[Profile], asserted=None) -> str:
             f"<td class='user'>{escape(p.username)}</td>"
             f"<td>{escape(p.display_name or '')}</td>"
             f"<td class='bio'>{escape((p.bio or '')[:160])}</td>"
-            f"<td class='url'><a href='{escape(str(p.url))}' target='_blank' rel='noopener'>{escape(str(p.url))}</a></td>"
+            f"<td class='url'>{url_cell}</td>"
             "</tr>"
         )
     if asserted:
         for a in asserted:
             via = ", ".join(a.asserted_by)
+            asserted_url_safe = _safe_url(a.url)
+            asserted_cell = (
+                f"<a href='{asserted_url_safe}' target='_blank' rel='noopener'>{asserted_url_safe}</a>"
+                if asserted_url_safe
+                else "<span class='muted'>(invalid URL)</span>"
+            )
             rows.append(
                 "<tr class='asserted'>"
                 "<td></td>"
@@ -197,7 +223,7 @@ def _profile_table(profiles: list[Profile], asserted=None) -> str:
                 f"<td class='user'>{escape(a.handle)}</td>"
                 "<td class='muted'><i>not scanned</i></td>"
                 "<td></td>"
-                f"<td class='url'><a href='{escape(a.url)}' target='_blank' rel='noopener'>{escape(a.url)}</a></td>"
+                f"<td class='url'>{asserted_cell}</td>"
                 "</tr>"
             )
     rows.append("</table>")

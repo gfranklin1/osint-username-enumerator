@@ -69,8 +69,17 @@ def scan(
     ),
     use_embeddings: bool = typer.Option(False, "--use-embeddings"),
     fmt: OutputFormat = typer.Option(OutputFormat.terminal, "--format"),
-    output: Path | None = typer.Option(None, "--output"),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        help=(
+            "File to write the report to. With --format json/html the file "
+            "uses that format; with --format terminal the format is inferred "
+            "from the extension (.html → HTML, anything else → JSON)."
+        ),
+    ),
     quiet: bool = typer.Option(False, "--quiet"),
+    debug: bool = typer.Option(False, "--debug", help="Show full traceback on pipeline error."),
 ) -> None:
     """Scan platforms for username variants of SEED, scrape, score, and cluster."""
     err_console = Console(stderr=True)
@@ -95,7 +104,14 @@ def scan(
         use_embeddings=use_embeddings,
     )
 
-    result = asyncio.run(_run(cfg, err_console, quiet))
+    try:
+        result = asyncio.run(_run(cfg, err_console, quiet))
+    except Exception as exc:
+        if debug:
+            raise
+        err_console.print(f"[red]aliasgraph: {type(exc).__name__}: {exc}[/red]")
+        err_console.print("[dim]Re-run with --debug for the full traceback.[/dim]")
+        raise typer.Exit(1) from exc
 
     if fmt is OutputFormat.json:
         if output:
@@ -112,7 +128,10 @@ def scan(
     else:
         render(result)
         if output:
-            write_html(result, output) if str(output).endswith(".html") else write_json(result, output)
+            if str(output).lower().endswith(".html"):
+                write_html(result, output)
+            else:
+                write_json(result, output)
             err_console.print(f"[green]Also wrote {output}[/green]")
 
 

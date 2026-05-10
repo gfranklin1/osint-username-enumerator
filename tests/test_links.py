@@ -57,3 +57,40 @@ def test_parse_handle(url, site, handle):
 
 def test_parse_handle_unknown_returns_none():
     assert parse_handle("https://random-site.example/profile") is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://twitter.com/explore",
+        "https://twitter.com/notifications",
+        "https://twitter.com/messages",
+        "https://twitter.com/home",
+        "https://twitter.com/search",
+        "https://instagram.com/explore",
+        "https://instagram.com/about",
+        "https://github.com/notifications",
+        "https://github.com/settings",
+        "https://github.com/login",
+        "https://medium.com/@signin",
+    ],
+)
+def test_reserved_paths_not_extracted_as_handles(url):
+    assert parse_handle(url) is None, url
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        # Trailing punctuation that's actually punctuation, not URL syntax:
+        ("https://example.com/path,", "https://example.com/path"),
+        ("https://example.com/path.", "https://example.com/path"),
+        ("https://example.com/path?q=1!", "https://example.com/path?q=1"),
+        # Trailing parens/brackets/quotes are NOT stripped by normalize() —
+        # those belong to URL_RE's exclusion set at extraction time. Real
+        # URLs with parens (Wikipedia article links) survive intact.
+        ("https://en.wikipedia.org/wiki/Foo_(bar)", "https://en.wikipedia.org/wiki/Foo_(bar)"),
+    ],
+)
+def test_normalize_preserves_parens(raw, expected):
+    assert normalize(raw) == expected

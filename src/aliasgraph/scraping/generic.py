@@ -14,8 +14,6 @@ from aliasgraph.scraping.links import (
     parse_handles,
 )
 
-# TODO: respect robots.txt for arbitrary sites.
-
 
 class GenericHTMLScraper:
     site = "*"
@@ -27,7 +25,8 @@ class GenericHTMLScraper:
         tree = HTMLParser(text)
 
         bio = _meta(tree, "og:description") or _meta_name(tree, "description")
-        display_name = _meta(tree, "og:title") or (tree.css_first("title").text() if tree.css_first("title") else None)
+        title_node = tree.css_first("title")
+        display_name = _meta(tree, "og:title") or (title_node.text() if title_node else None)
         avatar = _meta(tree, "og:image")
 
         urls: list[str] = []
@@ -77,8 +76,11 @@ class GenericHTMLScraper:
                 "display_name": _trim(cleaned_display) or profile.display_name,
                 "bio": cleaned_bio if cleaned_bio is not None else profile.bio,
                 "avatar_url": avatar or profile.avatar_url,
-                "links": normalized or profile.links,
-                "extracted_handles": parse_handles(normalized) or profile.extracted_handles,
+                # Always overwrite with the freshly normalized values — falling
+                # back to the prior list would mask intentional clears and
+                # confuse downstream "did anything change?" checks.
+                "links": normalized,
+                "extracted_handles": parse_handles(normalized),
             }
         )
 

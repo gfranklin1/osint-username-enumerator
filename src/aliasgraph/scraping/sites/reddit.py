@@ -52,7 +52,10 @@ class RedditScraper:
                 "bio": bio or profile.bio,
                 "avatar_url": avatar.split("?")[0] if avatar else profile.avatar_url,
                 "created_at": created_iso or profile.created_at,
-                "followers": data.get("total_karma") if isinstance(data.get("total_karma"), int) else None,
+                # Reddit exposes karma, not a follower count. They aren't
+                # comparable to other platforms' follower counts, so we leave
+                # the field empty rather than mislead downstream consumers.
+                "followers": None,
                 "links": normalized,
                 "extracted_handles": parse_handles(normalized),
             }

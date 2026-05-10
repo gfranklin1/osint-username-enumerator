@@ -49,13 +49,15 @@ class SiteError(BaseModel):
 
 
 class MatchFeatures(BaseModel):
+    # Always-present features (denominator anchor for renormalization).
     username_similarity: float
     display_name_similarity: float
-    bio_similarity: float
-    link_overlap_score: float
-    location_similarity: float
-    avatar_similarity: float = 0.0
     crosslink_strength: str  # "mutual" | "one_way" | "none"
+    # Optional features — None means "no data on at least one side", not "low similarity".
+    bio_similarity: float | None = None
+    link_overlap_score: float | None = None
+    location_similarity: float | None = None
+    avatar_similarity: float | None = None
 
 
 class AssertedAccount(BaseModel):
@@ -68,8 +70,9 @@ class AssertedAccount(BaseModel):
 
 class Cluster(BaseModel):
     cluster_id: int
-    confidence: float
-    members: list[str]  # "site:username"
+    confidence: float       # mean of pairwise scores within the cluster
+    min_edge: float = 0.0   # weakest pairwise score — surfaces transitive risk
+    members: list[str]      # "site:username"
     asserted: list[AssertedAccount] = []
     evidence: list[str]
 

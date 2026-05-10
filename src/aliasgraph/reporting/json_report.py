@@ -10,4 +10,4 @@ def to_json(result: ScanResult, indent: int = 2) -> str:
 
 
 def write_json(result: ScanResult, path: Path) -> None:
-    path.write_text(to_json(result))
+    path.write_text(to_json(result), encoding="utf-8")

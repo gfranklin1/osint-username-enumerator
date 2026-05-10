@@ -17,15 +17,21 @@ from PIL import Image, UnidentifiedImageError
 import imagehash
 
 from aliasgraph.models import Profile
+from aliasgraph.scraping.links import is_safe_public_url
 
 MAX_AVATAR_BYTES = 2_097_152  # 2 MiB
 PHASH_BITS = 64
+# Bound connect/read separately so a slow-loris avatar host can't tie up a
+# task for 10 seconds — caps total wait at ~5s.
+_AVATAR_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=3.0)
 
 
 async def fetch_avatar_hash(client: httpx.AsyncClient, url: str) -> str | None:
     """Download an avatar URL and return its pHash as a hex string, or None on failure."""
+    if not is_safe_public_url(url):
+        return None  # SSRF guard: never fetch loopback / private / cloud-metadata
     try:
-        async with client.stream("GET", url, timeout=10.0, follow_redirects=True) as r:
+        async with client.stream("GET", url, timeout=_AVATAR_TIMEOUT, follow_redirects=True) as r:
             if r.status_code != 200:
                 return None
             ctype = r.headers.get("content-type", "").lower()

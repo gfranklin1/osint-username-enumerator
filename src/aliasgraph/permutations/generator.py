@@ -27,33 +27,54 @@ def generate(
     out: list[str] = []
     seen: set[str] = set()
 
-    def add(u: str) -> None:
+    def add(u: str) -> bool:
+        """Append `u` if new. Returns False once max_candidates is reached so
+        callers can short-circuit."""
+        if len(out) >= max_candidates:
+            return False
         if not u or u in seen:
-            return
+            return True
         seen.add(u)
         out.append(u)
+        return True
 
-    add(seed_c)
+    if not add(seed_c):
+        return out
     for a in alias_list:
-        add(a)
+        if not add(a):
+            return out
 
     if first_c and last_c:
         for sep in SEPARATORS:
-            add(f"{first_c}{sep}{last_c}")
-            add(f"{last_c}{sep}{first_c}")
-        add(f"{first_c[0]}{last_c}")
-        add(f"{first_c[0]}.{last_c}")
-        add(f"{first_c}{last_c[0]}")
-        add(f"{last_c}{first_c[0]}")
+            if not add(f"{first_c}{sep}{last_c}"):
+                return out
+            if not add(f"{last_c}{sep}{first_c}"):
+                return out
+        for u in (
+            f"{first_c[0]}{last_c}",
+            f"{first_c[0]}.{last_c}",
+            f"{first_c}{last_c[0]}",
+            f"{last_c}{first_c[0]}",
+        ):
+            if not add(u):
+                return out
     elif first_c:
-        add(first_c)
+        if not add(first_c):
+            return out
     elif last_c:
-        add(last_c)
+        if not add(last_c):
+            return out
 
     bases = list(out)
     for base in bases:
+        if base.isdigit():
+            # Appending a numeric suffix to "2005" produces "20052005" — never
+            # useful, always wastes a candidate slot.
+            continue
         for suf in suffixes:
-            add(f"{base}{suf}")
-            add(f"{base}_{suf}")
+            if not add(f"{base}{suf}"):
+                return out
+            if not add(f"{base}_{suf}"):
+                return out
 
-    return out[:max_candidates]
+    return out

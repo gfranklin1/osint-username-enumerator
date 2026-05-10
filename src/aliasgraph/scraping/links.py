@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import re
 from collections.abc import Iterable
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -24,11 +25,34 @@ _TRACKING_PARAMS = {
 _TRACKING_PREFIXES = ("utm_",)
 _REJECT_SCHEMES = {"javascript", "mailto", "data", "tel"}
 
+# Common platform routes that look like a single-segment handle but aren't.
+# Anything in this set is rejected by parse_handle().
+_RESERVED_HANDLE_PATHS = {
+    "about", "accounts", "business", "contact", "careers",
+    "dashboard", "developers", "directory", "discover", "docs", "download",
+    "explore", "faq", "feed", "features", "find",
+    "help", "home", "i", "jobs", "legal",
+    "login", "logout", "messages", "notifications",
+    "privacy", "pricing", "register",
+    "search", "security", "settings", "shop", "signin", "signout", "signup",
+    "sitemap", "status", "store", "support",
+    "terms", "tos", "trending", "tv",
+    "u", "user", "users", "watch", "web",
+}
+
+# Hosts/labels that resolve to internal infrastructure. Used for SSRF guard.
+_BLOCKED_HOSTNAMES = {
+    "localhost",
+    "metadata.google.internal",
+    "metadata.aws.amazon.com",
+    "metadata",  # docker bridge default
+}
+
 
 def normalize(url: str | None) -> str | None:
     if not url:
         return None
-    url = url.strip().rstrip(".,;:)!?]\"'")
+    url = url.strip().rstrip(".,;:!?")
     try:
         parsed = urlparse(url)
     except ValueError:
@@ -42,6 +66,9 @@ def normalize(url: str | None) -> str | None:
     netloc = parsed.netloc.lower()
     if netloc.startswith("www."):
         netloc = netloc[4:]
+    # IDN canonicalization: punycode-encode the host so that "münchen.de" and
+    # "xn--mnchen-3ya.de" dedupe. Userinfo and port are preserved as-is.
+    netloc = _idna_canonical(netloc)
     path = parsed.path.rstrip("/") or "/"
     qs = [
         (k, v)
@@ -52,6 +79,46 @@ def normalize(url: str | None) -> str | None:
     return urlunparse(
         (parsed.scheme.lower(), netloc, path, "", urlencode(qs), "")
     )
+
+
+def _idna_canonical(netloc: str) -> str:
+    """Return netloc with the host portion punycode-encoded if it's Unicode."""
+    userinfo, sep, hostport = netloc.rpartition("@")
+    host_only, colon, port = hostport.partition(":")
+    try:
+        host_ascii = host_only.encode("idna").decode("ascii")
+    except UnicodeError:
+        host_ascii = host_only
+    rebuilt = host_ascii + (colon + port if colon else "")
+    return (userinfo + sep + rebuilt) if sep else rebuilt
+
+
+def is_safe_public_url(url: str | None) -> bool:
+    """SSRF guard: True only for http(s) URLs whose host is clearly public.
+
+    Rejects bare IPs in private/loopback/link-local/cloud-metadata ranges
+    and a small allowlist of well-known internal hostnames. No DNS — we
+    inspect the URL as written.
+    """
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme.lower() not in {"http", "https"}:
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    if host in _BLOCKED_HOSTNAMES or host.endswith(".local") or host.endswith(".internal"):
+        return False
+    # If host parses as an IP, reject anything that isn't a global address.
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return True  # hostname — treat as public (no DNS resolution here)
+    return bool(ip.is_global) and not ip.is_link_local
 
 
 def extract_urls_from_text(text: str | None) -> list[str]:
@@ -118,7 +185,7 @@ def parse_handle(url: str) -> ExtractedHandle | None:
     if not m:
         return None
     handle = m.group("handle")
-    if not handle or handle.lower() in {"about", "privacy", "terms", "login", "signup"}:
+    if not handle or handle.lower() in _RESERVED_HANDLE_PATHS:
         return None
     return ExtractedHandle(site=site, handle=handle, source_url=n)
 

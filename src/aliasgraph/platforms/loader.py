@@ -22,7 +22,9 @@ class _UnresolvedPlaceholder(Exception):
 def _resolve_placeholder(name: str, site: dict, url_main: str) -> str:
     name = name.strip()
     if name == "urlMain":
-        return url_main.rstrip("/") + ("/" if not url_main.endswith("/") else "")
+        if not url_main:
+            raise _UnresolvedPlaceholder("urlMain")
+        return url_main.rstrip("/") + "/"
     val = site.get(name)
     if isinstance(val, str):
         return val

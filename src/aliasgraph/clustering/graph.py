@@ -122,7 +122,9 @@ def build_clusters(
         ]
         if not cluster_edges:
             continue
-        confidence = round(mean(s for _, _, s, _ in cluster_edges), 4)
+        edge_scores = [s for _, _, s, _ in cluster_edges]
+        confidence = round(mean(edge_scores), 4)
+        min_edge = round(min(edge_scores), 4)
         members = sorted(
             (profile_by_key[k] for k in nodes if k in profile_by_key),
             key=lambda p: p.key(),
@@ -133,6 +135,7 @@ def build_clusters(
             Cluster(
                 cluster_id=cid,
                 confidence=confidence,
+                min_edge=min_edge,
                 members=[f"{m.site}:{m.username}" for m in members],
                 asserted=asserted,
                 evidence=evidence,
@@ -254,11 +257,20 @@ def _collect_asserted(members: list[Profile]) -> list[AssertedAccount]:
 
 
 def _looks_like_page_title(name: str, sites: list[str]) -> bool:
+    """True if `name` is a generic page title rather than a real display name.
+
+    Only filters when `name` matches a site present in the cluster (or the
+    universal "profile" placeholder). Drops the prior hardcoded
+    {dailymotion, instagram, trello, imgur} list — those are now matched
+    via the per-site equality check when those sites are actually in the
+    cluster, which avoids filtering a legitimate "instagram" display name
+    that appears on, say, GitHub.
+    """
     n = name.strip().lower()
-    for s in sites:
-        sl = s.strip().lower()
+    if n == "profile":
+        return True
+    sites_lower = {s.strip().lower() for s in sites}
+    for sl in sites_lower:
         if n == sl or n.startswith(sl + " ") or n.endswith(" " + sl):
-            return True
-        if n in {"profile", "dailymotion", "instagram", "trello", "imgur"}:
             return True
     return False

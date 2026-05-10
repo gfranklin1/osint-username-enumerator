@@ -41,8 +41,11 @@ def username_rarity(username: str) -> float:
         base = 0.92
 
     # Shannon entropy boost — gibberish like "x7q3kbz" is rarer than "matthew".
+    # English text averages ~4.7 bits/char and English usernames cluster around
+    # 2.8–3.2 bits/char; we use 2.5 as the "below typical" cutoff so usernames
+    # with even modest randomness pick up bonus, scaled gently (0.10/bit) and
+    # capped at 0.15 so it never dominates the length-based base.
     entropy = _shannon(u)
-    # Typical English-letter username: ~3.0 bits/char. Scale (entropy - 2.5) gently.
     entropy_bonus = max(0.0, min(0.15, (entropy - 2.5) * 0.10))
 
     # Mixed digits/letters bonus — real-name + suffix patterns ("gfranklin1").
@@ -50,9 +53,13 @@ def username_rarity(username: str) -> float:
     has_alpha = any(c.isalpha() for c in u)
     mixed_bonus = 0.05 if (has_digit and has_alpha) else 0.0
 
-    # Heavy repetition penalty (e.g. "aaaaaaaa").
+    # Heavy repetition penalty (e.g. "aaaaaaaa"). Smoothed: 1 unique char is
+    # always trivial; 2 unique chars is capped (covers "abab", "abba"); 3+
+    # gets the full bonus stack.
     unique_chars = len(set(u))
-    if unique_chars < 3:
+    if unique_chars == 1:
+        return 0.0
+    if unique_chars == 2:
         return min(base, 0.25)
 
     return max(0.0, min(1.0, base + entropy_bonus + mixed_bonus))

@@ -108,7 +108,7 @@ async def run(cfg: PipelineConfig, cbs: PipelineCallbacks | None = None) -> Scan
                 all_sites,
                 cfg,
                 cbs,
-                already_scanned=_seen_pairs(profiles, usernames),
+                already_scanned=_seen_pairs(sites, usernames, profiles),
             )
             errors.extend(follow_errors)
 
@@ -181,10 +181,20 @@ def _dedupe_landing_pages(profiles: list[Profile]) -> list[Profile]:
     return out
 
 
-def _seen_pairs(profiles: list[Profile], usernames: list[str]) -> set[tuple[str, str]]:
+def _seen_pairs(
+    sites: list[PlatformConfig],
+    usernames: list[str],
+    profiles: list[Profile],
+) -> set[tuple[str, str]]:
+    """All (site, username) pairs we've already swept this run.
+
+    Includes every (scanned_site × generated_username) combination — the
+    initial scan tried *all* of those, not just the ones where a profile was
+    found — plus the verified profiles themselves (their usernames may not be
+    in `usernames` if they came in via a previous follow-pass).
+    """
     seen = {(p.site.lower(), p.username.lower()) for p in profiles}
-    # Track (site, username) we already swept to avoid redundant follow scans
-    seen.update((p.site.lower(), u.lower()) for p in profiles for u in usernames)
+    seen.update((s.name.lower(), u.lower()) for s in sites for u in usernames)
     return seen
 
 

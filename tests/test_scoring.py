@@ -53,3 +53,20 @@ def test_username_only_with_generic_bios_low_score():
     b = _profile("Reddit", "jdoe", display_name="Jane D", bio="student")
     score, _, _ = score_pair(a, b)
     assert score < 0.6
+
+
+def test_missing_data_does_not_drag_score_below_threshold():
+    """Two profiles with strong username + display match but no bio/avatar/
+    links/location must still cross 0.75 — missing data is *missing*, not
+    'low similarity'. This is the renormalization invariant from ITER3 §1.4.
+    """
+    a = _profile(
+        "GitHub", "allarkvarkk",
+        display_name="Garrett Franklin",
+    )
+    b = _profile(
+        "Substack", "allarkvarkk",
+        display_name="Garrett Franklin",
+    )
+    score, _, _ = score_pair(a, b)
+    assert score >= 0.75

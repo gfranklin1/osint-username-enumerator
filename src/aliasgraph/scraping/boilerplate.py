@@ -51,8 +51,8 @@ def is_platform_boilerplate(bio: str | None, username: str, site: str | None = N
     if not bio:
         return False
     b = bio.lower().strip()
-    if len(b) < 12:
-        return True  # too short to be a meaningful bio
+    if len(b) < 4:
+        return True  # 1–3 chars is noise (single emoji, "hi", "."), not a bio
     u = username.lower()
     s = (site or "").lower()
     for snippet in _PLATFORM_BOILERPLATE:

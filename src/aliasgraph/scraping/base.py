@@ -112,9 +112,11 @@ async def scrape_all(
                 try:
                     enriched = await scraper.scrape(p, client)
                     enriched_out.append(enriched)
-                    if enriched is not p and (
-                        enriched.bio or enriched.display_name or enriched.links
-                    ):
+                    # Count as enriched if any post-scrape field (not just
+                    # bio/display/links) actually changed.
+                    if enriched is not p and enriched.model_dump(
+                        exclude={"quality"}
+                    ) != p.model_dump(exclude={"quality"}):
                         progress.enriched += 1
                 except Exception as exc:  # never raise out
                     enriched_out.append(p)

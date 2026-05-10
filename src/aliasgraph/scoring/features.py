@@ -21,6 +21,12 @@ class Embedder(Protocol):
 
 
 def _ratio(a: str | None, b: str | None) -> float:
+    """Best-of two rapidfuzz string-similarity scores in [0, 1].
+
+    Used for username, display-name, and location comparisons. ``token_set_ratio``
+    mostly matters for multi-word display names (e.g. "Linus Torvalds" vs
+    "Torvalds, Linus"); for usernames without whitespace it collapses to ``ratio``.
+    """
     if not a or not b:
         return 0.0
     return max(fuzz.ratio(a, b), fuzz.token_set_ratio(a, b)) / 100.0
@@ -36,14 +42,23 @@ def _display_sim(a: Profile, b: Profile) -> float:
     return _ratio(da, db)
 
 
-def _bio_sim(a: Profile, b: Profile, embedder: Embedder | None) -> float:
+def _bio_sim(a: Profile, b: Profile, embedder: Embedder | None) -> float | None:
+    """Bio similarity in [0, 1], or None if either bio is missing.
+
+    Strategy:
+    1. If an embedder is configured, use cosine similarity of sentence vectors.
+    2. Otherwise fall back to rapidfuzz token_set_ratio combined with a
+       Jaccard score over non-generic tokens, taking the max.
+    3. If both bios are entirely composed of generic tokens (e.g. "developer
+       and engineer"), the score is multiplied by 0.5 — generic vocabulary
+       matching is weak evidence on its own.
+    """
     if not a.bio or not b.bio:
-        return 0.0
+        return None
     if embedder is not None:
         v = embedder.similarity(a.bio, b.bio)
         if v is not None:
             return float(v)
-    # Token-set rapidfuzz with generic-token penalty
     base = fuzz.token_set_ratio(a.bio.lower(), b.bio.lower()) / 100.0
     a_tokens = {t for t in _tokens(a.bio) if t not in GENERIC_BIO_TOKENS}
     b_tokens = {t for t in _tokens(b.bio) if t not in GENERIC_BIO_TOKENS}
@@ -54,24 +69,32 @@ def _bio_sim(a: Profile, b: Profile, embedder: Embedder | None) -> float:
 
 
 def _tokens(s: str) -> list[str]:
+    """Lowercase alphanumeric tokens with single-char tokens dropped (kills 'a'/'i' noise)."""
     return [t for t in "".join(c.lower() if c.isalnum() else " " for c in s).split() if len(t) > 1]
 
 
-def _location_sim(a: Profile, b: Profile) -> float:
+def _location_sim(a: Profile, b: Profile) -> float | None:
     if not a.location or not b.location:
-        return 0.0
+        return None
     return _ratio(a.location.lower(), b.location.lower())
 
 
-def _link_overlap(a: Profile, b: Profile) -> float:
+def _link_overlap(a: Profile, b: Profile) -> float | None:
+    """Jaccard overlap of normalized outbound links, or None if both sides are empty."""
     la = {x.lower() for x in a.links}
     lb = {x.lower() for x in b.links}
     if not la and not lb:
-        return 0.0
+        return None
     union = la | lb
     if not union:
-        return 0.0
+        return None
     return len(la & lb) / len(union)
+
+
+def _avatar_sim(a: Profile, b: Profile) -> float | None:
+    if not a.avatar_hash or not b.avatar_hash:
+        return None
+    return hamming_similarity(a.avatar_hash, b.avatar_hash)
 
 
 def _crosslink(a: Profile, b: Profile) -> str:
@@ -99,6 +122,6 @@ def pairwise_features(
         bio_similarity=_bio_sim(a, b, embedder),
         link_overlap_score=_link_overlap(a, b),
         location_similarity=_location_sim(a, b),
-        avatar_similarity=hamming_similarity(a.avatar_hash, b.avatar_hash),
+        avatar_similarity=_avatar_sim(a, b),
         crosslink_strength=_crosslink(a, b),
     )

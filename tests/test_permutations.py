@@ -35,3 +35,36 @@ def test_initials():
 def test_alias_passthrough():
     out = generate("seed", aliases=["jacobmilo2005"])
     assert "jacobmilo2005" in out
+
+
+def test_numeric_suffixes_applied_to_alpha_bases():
+    out = generate(
+        "alphabase",
+        numeric_suffixes=["2005"],
+        max_candidates=20,
+    )
+    assert "alphabase2005" in out
+    assert "alphabase_2005" in out
+
+
+def test_numeric_suffix_skipped_on_numeric_base():
+    out = generate(
+        "2005",
+        numeric_suffixes=["2005"],
+        max_candidates=20,
+    )
+    assert "20052005" not in out
+    assert "2005_2005" not in out
+
+
+def test_max_candidates_short_circuits():
+    # With a very low cap and many possible variants, generate() must
+    # respect the cap (no overflow then slice).
+    out = generate(
+        "seed",
+        first="jacob",
+        last="hauptman",
+        numeric_suffixes=["1", "2", "3", "4"],
+        max_candidates=5,
+    )
+    assert len(out) == 5
