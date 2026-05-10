@@ -45,6 +45,22 @@ def list_sites() -> None:
 
 
 @app.command()
+def tui() -> None:
+    """Launch the interactive TUI (requires `aliasgraph[tui]`)."""
+    try:
+        from aliasgraph.tui import run_tui
+    except ImportError as e:
+        typer.echo(
+            "aliasgraph[tui] is not installed. Install with:\n"
+            "    uv pip install -e '.[tui]'\n"
+            "    # or: pip install 'aliasgraph[tui]'",
+            err=True,
+        )
+        raise typer.Exit(1) from e
+    run_tui()
+
+
+@app.command()
 def scan(
     seed: str = typer.Argument(..., help="Seed username."),
     first_name: str | None = typer.Option(None, "--first-name"),

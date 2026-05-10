@@ -1,0 +1,147 @@
+/* AliasGraph TUI — color palette mirrors the HTML report. */
+
+Screen {
+    background: #0e1116;
+    color: #e6edf3;
+}
+
+Header {
+    background: #161b22;
+    color: #2ea043;
+}
+
+Footer {
+    background: #161b22;
+    color: #8b949e;
+}
+
+#form-body, #results-body, #running-body {
+    padding: 1 2;
+}
+
+.field-label {
+    color: #8b949e;
+    margin-top: 1;
+    text-style: bold;
+}
+
+Input {
+    background: #161b22;
+    border: tall #30363d;
+}
+
+Input:focus {
+    border: tall #2ea043;
+}
+
+Switch {
+    margin: 0 2;
+}
+
+.switches-row {
+    height: 3;
+    margin-top: 1;
+    align-vertical: middle;
+}
+
+.switches-row Label {
+    margin: 0 1;
+    color: #8b949e;
+}
+
+.switches-grid {
+    height: auto;
+    margin-top: 1;
+    grid-size: 5 1;
+    grid-gutter: 1;
+}
+
+.switch-cell {
+    height: 3;
+    align-vertical: middle;
+}
+
+.button-row {
+    height: 5;
+    margin-top: 2;
+    align: center middle;
+}
+
+.button-row Button {
+    margin: 0 2;
+}
+
+#running-body {
+    align: center middle;
+}
+
+#running-body ProgressBar {
+    width: 80%;
+    margin-top: 1;
+}
+
+#status-log {
+    height: 1fr;
+    margin-top: 2;
+    background: #161b22;
+    border: round #30363d;
+}
+
+#results-grid {
+    layout: grid;
+    grid-size: 2 1;
+    grid-columns: 3fr 2fr;
+    grid-gutter: 1;
+}
+
+#cluster-tree {
+    height: 1fr;
+    background: #161b22;
+    border: round #30363d;
+}
+
+#detail-panel {
+    height: 1fr;
+    background: #161b22;
+    border: round #30363d;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+.section-title {
+    text-style: bold;
+    color: #2ea043;
+    margin-top: 1;
+}
+
+.muted {
+    color: #8b949e;
+}
+
+.warn {
+    color: #d29922;
+}
+
+.error {
+    color: #f85149;
+}
+
+#retune-row {
+    height: auto;
+    margin-top: 1;
+}
+
+#retune-row Input {
+    width: 12;
+    margin: 0 1;
+}
+
+.action-row {
+    height: 5;
+    margin-top: 1;
+    align: center middle;
+}
+
+.action-row Button {
+    margin: 0 1;
+}

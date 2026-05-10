@@ -64,6 +64,17 @@ def _status(cbs: PipelineCallbacks, msg: str) -> None:
 async def run(cfg: PipelineConfig, cbs: PipelineCallbacks | None = None) -> ScanResult:
     cbs = cbs or PipelineCallbacks()
 
+    # Load the embedder upfront, BEFORE any httpx async client opens. Model
+    # loading can fork (HF Hub helpers, git/LFS); doing it now means the fd
+    # table only contains the asyncio internals, not also our open sockets,
+    # which avoids `ValueError: bad value(s) in fds_to_keep` from
+    # subprocess.fork_exec on Python 3.14.
+    embedder = None
+    if cfg.use_embeddings:
+        _status(cbs, "Loading sentence-transformer model …")
+        from aliasgraph.scoring.embeddings import SentenceTransformerEmbedder
+        embedder = SentenceTransformerEmbedder()
+
     usernames = generate(
         cfg.seed,
         first=cfg.first_name,
@@ -118,12 +129,6 @@ async def run(cfg: PipelineConfig, cbs: PipelineCallbacks | None = None) -> Scan
 
     verified = [p for p in profiles if p.quality >= cfg.quality_threshold]
     unverified = [p for p in profiles if p.quality < cfg.quality_threshold]
-
-    embedder = None
-    if cfg.use_embeddings:
-        from aliasgraph.scoring.embeddings import SentenceTransformerEmbedder
-        _status(cbs, "Loading sentence-transformer model …")
-        embedder = SentenceTransformerEmbedder()
 
     clusters: list[Cluster] = []
     if cfg.cluster and len(verified) >= 2:
